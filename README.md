@@ -121,29 +121,58 @@ graph LR
 
 ## Architecture
 
+Grey = on-prem (concierge desk PC) · Blue = Google Cloud.
+
 ```mermaid
 graph TD
-    A[Phone Browser] -->|POST /upload| B[Flask Server :5002]
-    B -->|202 + job_id| A
-    A -->|GET /result/job_id| B
+    P[Phone Browser] -->|HTTPS| T[SSH Tunnel<br/>serveo.net reverse proxy]
+    T -->|:80 -> :5002| B
 
-    B --> C[Extraction Pipeline<br/>ocr_utils.py]
-    C -->|Primary| D[Gemini 2.5 Flash<br/>structured output]
-    C -->|Missing fields| E[Focused Gemini Retry]
-    C -->|Gemini unavailable| F[OpenCV + Tesseract<br/>local fallback]
+    subgraph ONPREM["On-Prem — Concierge Desk PC"]
+        B[Flask + Socket.IO Server<br/>port 5002]
+        C[Extraction Pipeline<br/>ocr_utils.py]
+        F[OpenCV + Tesseract<br/>local fallback]
+        G{Building Router}
+        H[(G1 Queue<br/>1285 Dupont St)]
+        I[(G2 Queue<br/>10 Graphophone Grove)]
+        L[1Valet Automation G1<br/>browser tab]
+        M[1Valet Automation G2<br/>browser tab]
+    end
 
-    B --> G{Building Router}
-    G -->|g1| H[G1 Queue — 1285 Dupont St]
-    G -->|g2| I[G2 Queue — 10 Graphophone Grove]
+    subgraph GCP["Google Cloud"]
+        D[Gemini API<br/>Gemini 2.5 Flash · structured output]
+        E[Gemini API<br/>focused retry call]
+        SA1[IAM Service Account G1]
+        SA2[IAM Service Account G2]
+        J[Sheets API<br/>G1 parcel log]
+        K[Sheets API<br/>G2 parcel log]
+    end
 
-    H --> J[Google Sheets G1]
-    I --> K[Google Sheets G2]
+    B -->|202 + job_id| P
+    P -.->|GET /result/job_id| T
 
-    H -->|Socket.IO room g1| L[1Valet Automation G1]
-    I -->|Socket.IO room g2| M[1Valet Automation G2]
+    B --> C
+    C -->|Primary| D
+    C -->|Missing fields| E
+    C -->|429 / unavailable| F
+
+    B --> G
+    G -->|building=g1| H
+    G -->|building=g2| I
+
+    H --> SA1 --> J
+    I --> SA2 --> K
+
+    H -->|Socket.IO room g1| L
+    I -->|Socket.IO room g2| M
+    L -->|/valet/complete job_id| B
+    M -->|/valet/complete job_id| B
 
     L -->|DOM automation| N[1Valet Portal G1]
     M -->|DOM automation| O[1Valet Portal G2]
+
+    style GCP fill:#e8f0fe,stroke:#4285F4,stroke-width:2px,color:#1a73e8
+    style ONPREM fill:#f1f3f4,stroke:#5f6368,stroke-width:2px,color:#202124
 ```
 
 ```mermaid
