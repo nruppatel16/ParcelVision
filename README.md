@@ -347,3 +347,51 @@ Planned next steps for the Google Cloud side of the hybrid model (not yet built)
 - **Secret Manager** for API keys and service-account credentials
 - **Terraform** for reproducible infrastructure
 - **Config-as-data onboarding** so adding a building needs zero code changes
+
+### Target architecture (planned — not yet deployed)
+
+The API tier moves to **Cloud Run**; only the 1Valet automation stays on-prem, because the portal session lives in the desk's browser. The SSH tunnel goes away — the desk only makes outbound connections.
+
+```mermaid
+graph LR
+    PH[Staff Phone] -->|HTTPS| CR
+
+    subgraph GCP["Google Cloud"]
+        CR[Cloud Run<br/>Flask + Socket.IO API]
+        GCS[(Cloud Storage<br/>label images)]
+        GEM[Gemini API<br/>2.5 Flash]
+        SQL[(Cloud SQL Postgres<br/>queues + history)]
+        SH[Sheets API<br/>per-building log]
+        SM[Secret Manager]
+        IAM[IAM<br/>per-building service accounts]
+        LOG[Cloud Logging]
+        CR --> GCS
+        CR -->|image| GEM -->|JSON| CR
+        CR --> SQL
+        CR --> SH
+        SM --> CR
+        IAM --> SH
+        CR --> LOG
+    end
+
+    subgraph EDGE["On-Prem — Concierge Desk"]
+        B1[1Valet Automation G1]
+        B2[1Valet Automation G2]
+    end
+
+    CR -->|Socket.IO room g1| B1
+    CR -->|Socket.IO room g2| B2
+    B1 -->|/valet/complete job_id| CR
+    B2 -->|/valet/complete job_id| CR
+    B1 --> V1[1Valet Portal G1]
+    B2 --> V2[1Valet Portal G2]
+```
+
+| | Today | Target |
+|---|---|---|
+| API server | Flask on desk PC | Cloud Run |
+| Ingress | SSH reverse tunnel | Cloud Run HTTPS URL |
+| Queues | In-memory per building | Cloud SQL (PostgreSQL) |
+| Label images | Local disk | Cloud Storage |
+| Secrets | `.env` + JSON key files | Secret Manager |
+| 1Valet automation | Desk browser | Desk browser (unchanged) |
